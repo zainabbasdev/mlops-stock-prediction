@@ -1,0 +1,177 @@
+# Grafana Alert Rules for ML Model Monitoring
+
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: ml_model_alerts
+    folder: MLOps Alerts
+    interval: 1m
+    rules:
+      - uid: high_latency_alert
+        title: High Prediction Latency
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: histogram_quantile(0.95, rate(prediction_latency_seconds_bucket[5m]))
+              refId: A
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          description: 'Prediction API latency has exceeded 500ms (95th percentile)'
+          summary: 'High latency detected in prediction service'
+        labels:
+          severity: warning
+          component: prediction-api
+        # Alert when p95 latency > 0.5 seconds (500ms)
+        # Conditions use classic conditions format
+        conditions:
+          - evaluator:
+              params:
+                - 0.5
+              type: gt
+            operator:
+              type: and
+            query:
+              params:
+                - A
+            reducer:
+              params: []
+              type: last
+            type: query
+      
+      - uid: high_data_drift_alert
+        title: High Data Drift Detected
+        condition: B
+        data:
+          - refId: B
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: data_drift_ratio
+              refId: B
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          description: 'Data drift ratio has exceeded 20%, indicating significant distribution shift'
+          summary: 'Data drift detected - model may need retraining'
+        labels:
+          severity: critical
+          component: model-monitoring
+        # Alert when drift ratio > 0.2 (20%)
+        conditions:
+          - evaluator:
+              params:
+                - 0.2
+              type: gt
+            operator:
+              type: and
+            query:
+              params:
+                - B
+            reducer:
+              params: []
+              type: last
+            type: query
+      
+      - uid: high_error_rate_alert
+        title: High Prediction Error Rate
+        condition: C
+        data:
+          - refId: C
+            queryType: ''
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (sum(rate(predictions_total{status="error"}[5m])) / sum(rate(predictions_total[5m]))) * 100
+              refId: C
+        noDataState: NoData
+        execErrState: Error
+        for: 3m
+        annotations:
+          description: 'Prediction error rate has exceeded 10%'
+          summary: 'High error rate in prediction service'
+        labels:
+          severity: critical
+          component: prediction-api
+        # Alert when error rate > 10%
+        conditions:
+          - evaluator:
+              params:
+                - 10
+              type: gt
+            operator:
+              type: and
+            query:
+              params:
+                - C
+            reducer:
+              params: []
+              type: last
+            type: query
+
+# Contact points for notifications
+contactPoints:
+  - orgId: 1
+    name: default-email
+    receivers:
+      - uid: default-email-receiver
+        type: email
+        settings:
+          addresses: mlops-team@example.com
+          singleEmail: false
+        disableResolveMessage: false
+  
+  - orgId: 1
+    name: slack-alerts
+    receivers:
+      - uid: slack-receiver
+        type: slack
+        settings:
+          # Add your Slack webhook URL here
+          url: https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK
+          text: '{{ template "default.message" . }}'
+        disableResolveMessage: false
+  
+  - orgId: 1
+    name: file-logger
+    receivers:
+      - uid: file-logger-receiver
+        type: webhook
+        settings:
+          url: http://localhost:9090/alerts
+          httpMethod: POST
+        disableResolveMessage: false
+
+# Notification policies
+policies:
+  - orgId: 1
+    receiver: default-email
+    group_by:
+      - alertname
+      - component
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      - receiver: slack-alerts
+        matchers:
+          - severity = critical
+        continue: true
+      - receiver: file-logger
+        matchers:
+          - component = prediction-api
+        continue: true

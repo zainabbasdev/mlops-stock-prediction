@@ -161,6 +161,7 @@ def train_model(**context):
     """Task 5: Train the prediction model"""
     ti = context['ti']
     processed_data_path = ti.xcom_pull(key='processed_data_path', task_ids='transform_data')
+    profile_report_path = ti.xcom_pull(key='profile_report_path', task_ids='generate_data_profile')
     
     print(f"Loading processed data from: {processed_data_path}")
     df = pd.read_csv(processed_data_path, index_col=0, parse_dates=True)
@@ -172,7 +173,8 @@ def train_model(**context):
         df,
         model_type="random_forest",
         hyperparameters={"n_estimators": 100, "max_depth": 10, "random_state": 42},
-        run_name=f"airflow_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        run_name=f"airflow_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        profile_report_path=profile_report_path
     )
     
     # Save model locally
@@ -197,10 +199,48 @@ def version_data_with_dvc(**context):
     
     print(f"Versioning data with DVC: {processed_data_path}")
     
-    # Note: This assumes DVC is initialized
-    # In production, you would run: dvc add {processed_data_path} && dvc push
+    try:
+        import subprocess
+        
+        # Change to airflow directory
+        airflow_dir = "/opt/airflow"
+        os.chdir(airflow_dir)
+        
+        # Add file to DVC
+        print(f"Running: dvc add {processed_data_path}")
+        result_add = subprocess.run(
+            ["dvc", "add", processed_data_path],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        
+        if result_add.returncode == 0:
+            print(f"✓ File added to DVC tracking")
+            print(result_add.stdout)
+            
+            # Push to remote storage
+            print("Pushing to DVC remote...")
+            result_push = subprocess.run(
+                ["dvc", "push"],
+                capture_output=True,
+                text=True,
+                check=False,
+                env={**os.environ, "AWS_ACCESS_KEY_ID": "minioadmin", "AWS_SECRET_ACCESS_KEY": "minioadmin"}
+            )
+            
+            if result_push.returncode == 0:
+                print("✓ Data pushed to remote storage")
+                print(result_push.stdout)
+            else:
+                print(f"⚠ DVC push warning: {result_push.stderr}")
+        else:
+            print(f"⚠ DVC add info: {result_add.stderr}")
+            
+    except Exception as e:
+        print(f"⚠ DVC versioning encountered an issue: {e}")
+        print("Continuing pipeline execution...")
     
-    print("✓ Data versioned with DVC (placeholder)")
     return True
 
 
