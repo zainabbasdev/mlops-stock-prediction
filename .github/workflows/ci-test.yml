@@ -179,12 +179,12 @@ jobs:
       
       - name: Check model quality gate
         run: |
-          verdict=\$(cat model_verdict.txt)
-          if [ \"\$verdict\" == \"worse\" ]; then
-            echo \"❌ New model performs worse than production. Blocking merge.\"
+          verdict=$(cat model_verdict.txt)
+          if [ "$verdict" == "worse" ]; then
+            echo "❌ New model performs worse than production. Blocking merge."
             exit 1
           else
-            echo \"✅ New model meets quality standards.\"
+            echo "✅ New model meets quality standards."
           fi
       
       - name: Create CML Report
