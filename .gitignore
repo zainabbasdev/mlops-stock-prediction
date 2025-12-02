@@ -1,3 +1,11 @@
+# Documentation (helper/temporary files)
+MEMBER1_COMMIT_GUIDE.md
+PROJECT_SUMMARY.md
+QUICK_REFERENCE.md
+TEAM_DISTRIBUTION.md
+SETUP_GUIDE.md
+README_GITHUB.md
+
 # Python
 __pycache__/
 *.py[cod]
@@ -39,8 +47,12 @@ env/
 # Environment variables
 .env
 .env.local
+.env.production
 
-# Data files
+# API Keys (backup)
+API\ KEYS
+
+# Data files (keep only structure)
 data/raw/*
 data/processed/*
 data/cache/*
@@ -48,45 +60,88 @@ data/cache/*
 !data/processed/.gitkeep
 !data/cache/.gitkeep
 
-# DVC
+# DVC (version control handles data)
 /data/raw/*.csv
 /data/raw/*.json
 /data/processed/*.csv
 /data/processed/*.parquet
+/data/processed/*.html
+.dvc/cache/
+.dvc/tmp/
 
-# MLflow
+# MLflow (experiments and artifacts)
 mlruns/
 mlartifacts/
+*.mlflow.db
 
-# Airflow
+# Airflow (logs and temporary files)
 airflow/logs/
 airflow/*.db
 airflow/*.pid
 airflow/*.cfg
 airflow/*.log
 airflow/airflow-webserver.pid
+airflow/dags/__pycache__/
+airflow/.airflowignore
 
-# Docker
+# Docker (volumes and logs)
 *.log
+docker-compose.override.yml
 
-# Models
+# Models (keep only .gitkeep, track via DVC)
 models/*.pkl
 models/*.h5
 models/*.joblib
+models/*.json
+models/*.pt
+models/*.pth
 !models/.gitkeep
+!models/README.md
 
 # Logs
 logs/
 *.log
 
-# Monitoring
+# Monitoring (runtime data)
 prometheus/data/
 grafana/data/
+monitoring/prometheus/data/
+monitoring/grafana/data/
 
-# Reports
+# Reports (generated files)
 reports/*.html
+reports/*.pdf
+reports/*.png
+reports/*.jpg
 !reports/.gitkeep
+!reports/README.md
 
-# OS
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+*.cover
+.hypothesis/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Secrets and credentials
+secrets/
+credentials/
+*.pem
+*.key
+*.crt

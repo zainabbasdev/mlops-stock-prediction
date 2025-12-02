@@ -54,8 +54,9 @@ def extract_data(**context):
     print(f"Extracting data for {symbol}...")
     extractor = DataExtractor(symbol=symbol)
     
-    # Fetch intraday data
-    df = extractor.fetch_intraday_data(interval="60min", outputsize="full")
+    # Fetch daily data (uses fewer API calls than intraday)
+    # Note: Free tier only supports "compact" (100 days)
+    df = extractor.fetch_daily_data(outputsize="compact")
     
     # Save raw data
     output_path = "/opt/airflow/data/raw"
