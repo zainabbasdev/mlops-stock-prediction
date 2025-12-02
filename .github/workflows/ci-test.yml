@@ -30,7 +30,7 @@ jobs:
       - name: Setup CML
         uses: iterative/setup-cml@v1
       
-      - name: Run model training
+      - name: Run model training and comparison
         env:
           MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
           MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
@@ -63,20 +63,129 @@ jobs:
           df.to_csv('data/processed/test_data.csv')
           "
           
-          # Train model and save metrics
-          python src/models/train.py || echo "Training test completed"
+          # Train new model and capture metrics
+          python -c "
+          import mlflow
+          import os
+          from src.models.train import VolatilityPredictor
+          import pandas as pd
           
-          # Create metrics report
-          echo "## Model Training Results" > report.md
-          echo "" >> report.md
-          echo "### New Model Performance" >> report.md
-          echo "- RMSE: 0.0234" >> report.md
-          echo "- MAE: 0.0189" >> report.md
-          echo "- R²: 0.7654" >> report.md
-          echo "" >> report.md
-          echo "### Comparison with Production Model" >> report.md
-          echo "- Production RMSE: 0.0245" >> report.md
-          echo "- Improvement: **4.5%** ✅" >> report.md
+          # Load test data
+          df = pd.read_csv('data/processed/test_data.csv', index_col=0, parse_dates=True)
+          
+          # Train new model
+          predictor = VolatilityPredictor(experiment_name='stock_volatility_prediction')
+          result = predictor.train_and_log(
+              df,
+              model_type='random_forest',
+              hyperparameters={'n_estimators': 100, 'max_depth': 10, 'random_state': 42},
+              run_name='ci_test_run'
+          )
+          
+          # Save new metrics
+          with open('new_metrics.txt', 'w') as f:
+              f.write(f\"rmse={result['metrics']['rmse']}\\n\")
+              f.write(f\"mae={result['metrics']['mae']}\\n\")
+              f.write(f\"r2={result['metrics']['r2']}\\n\")
+          
+          # Fetch production model metrics from MLflow
+          client = mlflow.tracking.MlflowClient()
+          try:
+              # Get the latest production model
+              model_name = os.getenv('MODEL_NAME', 'stock_volatility_predictor')
+              versions = client.search_model_versions(f\"name='{model_name}'\")
+              
+              if versions:
+                  # Get latest version metrics
+                  latest_version = versions[0]
+                  run = client.get_run(latest_version.run_id)
+                  prod_rmse = run.data.metrics.get('rmse', 999)
+                  prod_mae = run.data.metrics.get('mae', 999)
+                  prod_r2 = run.data.metrics.get('r2', -999)
+                  
+                  with open('prod_metrics.txt', 'w') as f:
+                      f.write(f\"rmse={prod_rmse}\\n\")
+                      f.write(f\"mae={prod_mae}\\n\")
+                      f.write(f\"r2={prod_r2}\\n\")
+              else:
+                  # No production model yet
+                  with open('prod_metrics.txt', 'w') as f:
+                      f.write('rmse=999\\n')
+                      f.write('mae=999\\n')
+                      f.write('r2=-999\\n')
+          except Exception as e:
+              print(f'Error fetching production metrics: {e}')
+              with open('prod_metrics.txt', 'w') as f:
+                  f.write('rmse=999\\n')
+                  f.write('mae=999\\n')
+                  f.write('r2=-999\\n')
+          " || echo "Training completed with warnings"
+          
+          # Generate comparison report
+          python -c "
+          import sys
+          
+          # Read metrics
+          def read_metrics(filename):
+              metrics = {}
+              with open(filename, 'r') as f:
+                  for line in f:
+                      key, value = line.strip().split('=')
+                      metrics[key] = float(value)
+              return metrics
+          
+          new_metrics = read_metrics('new_metrics.txt')
+          prod_metrics = read_metrics('prod_metrics.txt')
+          
+          # Calculate improvements
+          rmse_improvement = ((prod_metrics['rmse'] - new_metrics['rmse']) / prod_metrics['rmse']) * 100 if prod_metrics['rmse'] > 0 else 0
+          mae_improvement = ((prod_metrics['mae'] - new_metrics['mae']) / prod_metrics['mae']) * 100 if prod_metrics['mae'] > 0 else 0
+          r2_improvement = ((new_metrics['r2'] - prod_metrics['r2']) / abs(prod_metrics['r2'])) * 100 if prod_metrics['r2'] != 0 else 0
+          
+          # Check if new model is better
+          is_better = new_metrics['rmse'] < prod_metrics['rmse']
+          
+          # Generate report
+          with open('report.md', 'w') as f:
+              f.write('## 📊 Model Training & Comparison Report\\n\\n')
+              f.write('### New Model Performance\\n')
+              f.write(f\"- **RMSE**: {new_metrics['rmse']:.6f}\\n\")
+              f.write(f\"- **MAE**: {new_metrics['mae']:.6f}\\n\")
+              f.write(f\"- **R²**: {new_metrics['r2']:.4f}\\n\\n\")
+              
+              f.write('### Production Model Performance\\n')
+              f.write(f\"- **RMSE**: {prod_metrics['rmse']:.6f}\\n\")
+              f.write(f\"- **MAE**: {prod_metrics['mae']:.6f}\\n\")
+              f.write(f\"- **R²**: {prod_metrics['r2']:.4f}\\n\\n\")
+              
+              f.write('### Performance Comparison\\n')
+              f.write(f\"- RMSE Change: **{rmse_improvement:+.2f}%** {'✅' if rmse_improvement > 0 else '❌'}\\n\")
+              f.write(f\"- MAE Change: **{mae_improvement:+.2f}%** {'✅' if mae_improvement > 0 else '❌'}\\n\")
+              f.write(f\"- R² Change: **{r2_improvement:+.2f}%** {'✅' if r2_improvement > 0 else '❌'}\\n\\n\")
+              
+              if is_better:
+                  f.write('### ✅ Verdict: NEW MODEL IS BETTER\\n')
+                  f.write('The new model shows improved performance and is recommended for deployment.\\n')
+              else:
+                  f.write('### ⚠️ Verdict: NEW MODEL IS WORSE\\n')
+                  f.write('The new model does not improve upon the production model. Consider rejecting this change.\\n')
+              
+              # Save verdict for next step
+              with open('model_verdict.txt', 'w') as vf:
+                  vf.write('better' if is_better else 'worse')
+          
+          print('Report generated successfully')
+          "
+      
+      - name: Check model quality gate
+        run: |
+          verdict=\$(cat model_verdict.txt)
+          if [ \"\$verdict\" == \"worse\" ]; then
+            echo \"❌ New model performs worse than production. Blocking merge.\"
+            exit 1
+          else
+            echo \"✅ New model meets quality standards.\"
+          fi
       
       - name: Create CML Report
         env:

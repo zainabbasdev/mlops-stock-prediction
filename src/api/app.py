@@ -3,7 +3,7 @@ FastAPI Prediction Service with Prometheus Monitoring
 Serves real-time stock volatility predictions
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
@@ -364,6 +364,46 @@ async def model_info():
         "feature_count": len(model_service.feature_columns),
         "features": model_service.feature_columns[:10]  # First 10 features
     }
+
+
+@app.post("/alerts")
+async def receive_alert(request: Request):
+    """
+    Webhook endpoint to receive Grafana alerts
+    Logs alerts to file for monitoring
+    """
+    try:
+        alert_data = await request.json()
+        
+        # Log alert to file
+        log_dir = "/app/logs"
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, "grafana_alerts.log")
+        
+        timestamp = datetime.now().isoformat()
+        log_entry = f"\n{'='*80}\n"
+        log_entry += f"[{timestamp}] GRAFANA ALERT RECEIVED\n"
+        log_entry += f"{'-'*80}\n"
+        log_entry += json.dumps(alert_data, indent=2)
+        log_entry += f"\n{'='*80}\n"
+        
+        with open(log_file, "a") as f:
+            f.write(log_entry)
+        
+        print(f"⚠️  Alert received and logged to {log_file}")
+        
+        return {
+            "status": "received",
+            "timestamp": timestamp,
+            "message": "Alert logged successfully"
+        }
+        
+    except Exception as e:
+        print(f"Error processing alert: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 
 if __name__ == "__main__":
