@@ -214,7 +214,8 @@ class VolatilityPredictor:
         df: pd.DataFrame,
         model_type: str = "random_forest",
         hyperparameters: Optional[Dict] = None,
-        run_name: Optional[str] = None
+        run_name: Optional[str] = None,
+        profile_report_path: Optional[str] = None
     ) -> Dict:
         """
         Complete training pipeline with MLflow logging
@@ -224,6 +225,7 @@ class VolatilityPredictor:
             model_type: Type of model to train
             hyperparameters: Model hyperparameters
             run_name: Name for MLflow run
+            profile_report_path: Path to data profiling HTML report
         
         Returns:
             Dictionary with metrics and model info
@@ -270,6 +272,11 @@ class VolatilityPredictor:
                 
                 print(f"\nTop 10 Important Features:")
                 print(feature_importance.head(10))
+            
+            # Log data profiling report if provided
+            if profile_report_path and os.path.exists(profile_report_path):
+                print(f"Logging data profiling report: {profile_report_path}")
+                mlflow.log_artifact(profile_report_path, artifact_path="data_quality")
             
             # Log model
             mlflow.sklearn.log_model(
