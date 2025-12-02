@@ -1,0 +1,128 @@
+{
+  "dashboard": {
+    "title": "ML Model Monitoring Dashboard",
+    "tags": ["mlops", "monitoring"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Prediction Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(predictions_total[5m])",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        }
+      },
+      {
+        "id": 2,
+        "title": "Prediction Latency (p95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(prediction_latency_seconds_bucket[5m]))",
+            "legendFormat": "p95 latency"
+          }
+        ],
+        "gridPos": {
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        }
+      },
+      {
+        "id": 3,
+        "title": "Data Drift Ratio",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "data_drift_ratio",
+            "legendFormat": "Drift Ratio"
+          }
+        ],
+        "gridPos": {
+          "x": 0,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        },
+        "alert": {
+          "name": "High Data Drift",
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [0.2],
+                "type": "gt"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": 4,
+        "title": "Model Prediction Score",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "model_prediction_score",
+            "legendFormat": "Latest Prediction"
+          }
+        ],
+        "gridPos": {
+          "x": 12,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        }
+      },
+      {
+        "id": 5,
+        "title": "Total Predictions",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(predictions_total)",
+            "legendFormat": "Total"
+          }
+        ],
+        "gridPos": {
+          "x": 0,
+          "y": 16,
+          "w": 6,
+          "h": 4
+        }
+      },
+      {
+        "id": 6,
+        "title": "Success Rate",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "sum(rate(predictions_total{status=\"success\"}[5m])) / sum(rate(predictions_total[5m])) * 100",
+            "legendFormat": "Success %"
+          }
+        ],
+        "gridPos": {
+          "x": 6,
+          "y": 16,
+          "w": 6,
+          "h": 4
+        }
+      }
+    ],
+    "refresh": "10s",
+    "schemaVersion": 27,
+    "version": 1
+  }
+}
